@@ -1,60 +1,58 @@
 from pathlib import Path
-import cv2
-from ultralytics import YOLO
 import csv
 import time
+
+import cv2
+
+from src.video.video_processor import VideoProcessor
+from src.detection.yolo_detector import YOLODetector
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 VIDEO_PATH = BASE_DIR / "videos" / "partido.mp4"
 OUTPUT_PATH = BASE_DIR / "outputs" / "partido_detectado.mp4"
+MODEL_PATH = BASE_DIR / "models" / "yolo11m.pt"
 
-cap = cv2.VideoCapture(str(VIDEO_PATH))
 
-if not cap.isOpened():
-    raise RuntimeError("No se pudo abrir el video.")
+processor = VideoProcessor(
+    VIDEO_PATH,
+    OUTPUT_PATH,
+)
 
-width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-fps = cap.get(cv2.CAP_PROP_FPS)
+detector = YOLODetector(
+    MODEL_PATH,
+    tracker="bytetrack.yaml",
+)
 
-print(width, height, fps)
-
-fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-
-writer = cv2.VideoWriter(str(OUTPUT_PATH), fourcc, fps, (width, height))
-
-MODEL_PATH = BASE_DIR / "models" / "yolo11l.pt"
-
-model = YOLO(str(MODEL_PATH))
+print(
+    processor.width,
+    processor.height,
+    processor.fps,
+)
 
 frame_number = 0
-
-total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
 track_stats = {}
 tracks = {}
 
+start = time.perf_counter()
+
 while True:
 
-    ret, frame = cap.read()
+    ret, frame = processor.read()
 
     if not ret:
         break
 
     frame_number += 1
 
-    print(f"\rProcesando frame {frame_number}/{total_frames}", end="")
-
-    results = model.track(
-        source=frame,
-        persist=True,
-        tracker="bytetrack.yaml",
-        classes=[0],
-        conf=0.25,
-        imgsz=960,
-        verbose=False,
+    print(
+        f"\rProcesando frame {frame_number}/{processor.total_frames}",
+        end=""
     )
+
+    results = detector.track(frame)
 
     annotated_frame = frame.copy()
 
@@ -82,18 +80,26 @@ while True:
 
         else:
 
-            track_stats[track_id]["last_frame"] = frame_number
-            track_stats[track_id]["frames_seen"] += 1
-            track_stats[track_id]["conf_sum"] += confidence
-            gap = frame_number - track_stats[track_id]["last_seen"] - 1
+            stats = track_stats[track_id]
 
-            track_stats[track_id]["missing_frames"] += max(gap, 0)
+            stats["last_frame"] = frame_number
+            stats["frames_seen"] += 1
+            stats["conf_sum"] += confidence
 
-            track_stats[track_id]["last_seen"] = frame_number
+            gap = frame_number - stats["last_seen"] - 1
+
+            stats["missing_frames"] += max(gap, 0)
+            stats["last_seen"] = frame_number
 
         x1, y1, x2, y2 = map(int, box.xyxy[0])
 
-        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.rectangle(
+            annotated_frame,
+            (x1, y1),
+            (x2, y2),
+            (0, 255, 0),
+            2,
+        )
 
         cv2.putText(
             annotated_frame,
@@ -105,100 +111,92 @@ while True:
             2,
         )
 
-    for box in boxes:
-
-        if box.id is None:
-            continue
-
-        track_id = int(box.id)
-
-        x1, y1, x2, y2 = map(int, box.xyxy[0])
-
         cx = (x1 + x2) // 2
         cy = (y1 + y2) // 2
 
-        tracks.setdefault(track_id, []).append(
-            {"frame": frame_number, "center": (cx, cy)}
-        )
+        tracks.setdefault(track_id, []).append({
+            "frame": frame_number,
+            "center": (cx, cy),
+        })
 
-    cv2.imshow("Football Analysis Lab", annotated_frame)
+    cv2.imshow(
+        "Football Analysis Lab",
+        annotated_frame,
+    )
 
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
 
-    writer.write(annotated_frame)
+    processor.write(annotated_frame)
+
+processor.release()
+
+elapsed = time.perf_counter() - start
 
 csv_path = BASE_DIR / "outputs" / "tracking_report.csv"
 
 with open(csv_path, "w", newline="") as f:
 
-    writer_csv = csv.writer(f)
+    writer = csv.writer(f)
 
-    writer_csv.writerow(
-        [
-            "track_id",
-            "first_frame",
-            "last_frame",
-            "frames_seen",
-            "duration_seconds",
-            "average_confidence",
-            "missing_frames",
-        ]
-    )
+    writer.writerow([
+        "track_id",
+        "first_frame",
+        "last_frame",
+        "frames_seen",
+        "duration_seconds",
+        "average_confidence",
+        "missing_frames",
+    ])
 
     for track_id, stats in track_stats.items():
 
-        duration = stats["frames_seen"] / fps
-        avg_conf = stats["conf_sum"] / stats["frames_seen"]
+        writer.writerow([
+            track_id,
+            stats["first_frame"],
+            stats["last_frame"],
+            stats["frames_seen"],
+            round(stats["frames_seen"] / processor.fps, 2),
+            round(stats["conf_sum"] / stats["frames_seen"], 3),
+            stats["missing_frames"],
+        ])
 
-        writer_csv.writerow(
-            [
-                track_id,
-                stats["first_frame"],
-                stats["last_frame"],
-                stats["frames_seen"],
-                round(duration, 2),
-                round(avg_conf, 3),
-            ]
-        )
-
-cap.release()
 print("\n" + "=" * 50)
 print("TRACKING REPORT")
 print("=" * 50)
 
 print(f"Frames procesados: {frame_number}")
 print(f"IDs creados: {len(track_stats)}")
-long_tracks = 0
-short_tracks = 0
 
-max_track = None
-max_frames = 0
+long_tracks = sum(
+    1
+    for stats in track_stats.values()
+    if stats["frames_seen"] >= 100
+)
 
-for track_id, stats in track_stats.items():
+short_tracks = sum(
+    1
+    for stats in track_stats.values()
+    if stats["frames_seen"] <= 10
+)
 
-    if stats["frames_seen"] >= 100:
-        long_tracks += 1
+max_track = max(
+    track_stats,
+    key=lambda k: track_stats[k]["frames_seen"],
+)
 
-    if stats["frames_seen"] <= 10:
-        short_tracks += 1
-
-    if stats["frames_seen"] > max_frames:
-        max_frames = stats["frames_seen"]
-        max_track = track_id
+print(f"Tracker: {detector.tracker}")
 
 print(f"Tracks largos: {long_tracks}")
 print(f"Tracks cortos: {short_tracks}")
-start = time.perf_counter()
-
-end = time.perf_counter()
-
-elapsed = end - start
 
 print(f"Tiempo total: {elapsed:.2f} s")
-print(f"Tiempo por frame: {elapsed / frame_number:.4f} s")
-print(f"FPS efectivos: {frame_number / elapsed:.2f}")
-print(f"Track más largo: ID {max_track} ({max_frames} frames)")
-writer.release()
-cv2.destroyAllWindows()
+print(f"Tiempo por frame: {elapsed/frame_number:.4f} s")
+print(f"FPS efectivos: {frame_number/elapsed:.2f}")
+
+print(
+    f"Track más largo: ID {max_track} "
+    f"({track_stats[max_track]['frames_seen']} frames)"
+)
+
 print("Video generado correctamente.")

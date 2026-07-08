@@ -1,0 +1,164 @@
+from pathlib import Path
+import time
+
+import cv2
+
+from src.video.video_processor import VideoProcessor
+from src.detection.yolo_detector import YOLODetector
+from src.visualization.renderer import Renderer
+
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+VIDEO_PATH = BASE_DIR / "videos" / "partido.mp4"
+OUTPUT_PATH = BASE_DIR / "outputs" / "partido_trajectories.mp4"
+MODEL_PATH = BASE_DIR / "models" / "yolo11m.pt"
+
+
+processor = VideoProcessor(
+    VIDEO_PATH,
+    OUTPUT_PATH,
+)
+
+detector = YOLODetector(
+    MODEL_PATH,
+    tracker="bytetrack.yaml",
+)
+
+renderer = Renderer()
+
+print(
+    f"Resolución: {processor.width}x{processor.height}"
+)
+print(
+    f"FPS del video: {processor.fps:.2f}"
+)
+
+tracks = {}
+
+frame_number = 0
+
+start = time.perf_counter()
+
+while True:
+
+    ret, frame = processor.read()
+
+    if not ret:
+        break
+
+    frame_number += 1
+
+    print(
+        f"\rProcesando frame {frame_number}/{processor.total_frames}",
+        end=""
+    )
+
+    results = detector.track(frame)
+
+    boxes = results[0].boxes
+
+    #
+    # Actualizar trayectorias
+    #
+
+    for box in boxes:
+
+        if box.id is None:
+            continue
+
+        track_id = int(box.id)
+
+        confidence = float(box.conf)
+
+        x1, y1, x2, y2 = map(int, box.xyxy[0])
+
+        cx = (x1 + x2) // 2
+        cy = (y1 + y2) // 2
+
+        tracks.setdefault(track_id, []).append(
+            {
+                "frame": frame_number,
+                "center": (cx, cy),
+                "confidence": confidence,
+            }
+        )
+
+    annotated_frame = frame.copy()
+
+    #
+    # Dibujar trayectorias
+    #
+
+    annotated_frame = renderer.draw_trajectories(
+        annotated_frame,
+        tracks,
+        history=40,
+    )
+
+    #
+    # Dibujar cajas
+    #
+
+    annotated_frame = renderer.draw_boxes(
+        annotated_frame,
+        boxes,
+    )
+
+    #
+    # Información
+    #
+
+    cv2.putText(
+        annotated_frame,
+        f"Frame: {frame_number}",
+        (20, 40),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1,
+        (255, 255, 255),
+        2,
+    )
+
+    cv2.putText(
+        annotated_frame,
+        f"Players: {len(boxes)}",
+        (20, 80),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1,
+        (255, 255, 255),
+        2,
+    )
+
+    cv2.imshow(
+        "Football Analysis Lab",
+        annotated_frame,
+    )
+
+    if cv2.waitKey(1) & 0xFF == ord("q"):
+        break
+
+    processor.write(
+        annotated_frame,
+    )
+
+processor.release()
+
+elapsed = time.perf_counter() - start
+
+print("\n")
+print("=" * 50)
+print("TRAJECTORY REPORT")
+print("=" * 50)
+
+print(f"Modelo: {detector.model_name}")
+print(f"Tracker: {detector.tracker}")
+
+print(f"Frames procesados: {frame_number}")
+
+print(f"Jugadores detectados: {len(tracks)}")
+
+print(f"Tiempo total: {elapsed:.2f} s")
+print(f"Tiempo por frame: {elapsed/frame_number:.4f} s")
+print(f"FPS efectivos: {frame_number/elapsed:.2f}")
+
+print("Video generado correctamente.")

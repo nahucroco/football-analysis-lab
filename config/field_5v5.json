@@ -1,0 +1,20 @@
+{
+    "field_name": "Football 5",
+
+    "field_width_m": 40.0,
+    "field_height_m": 20.0,
+
+    "render_width_px": 900,
+    "render_height_px": 600,
+
+    "margin_px": 50,
+
+    "center_circle_radius_m": 3.0,
+
+    "penalty_area_width_m": 12.0,
+    "penalty_area_depth_m": 6.0,
+
+    "goal_width_m": 3.0,
+
+    "penalty_mark_distance_m": 6.0
+}
