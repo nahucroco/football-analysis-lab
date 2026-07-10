@@ -9,8 +9,8 @@ class YOLODetector:
         self,
         model_path: Path,
         tracker: str = "bytetrack.yaml",
-        confidence: float = 0.15,
-        image_size: int = 1536,
+        confidence: float = 0.25,
+        image_size: int = 960,
     ):
 
         self.model = YOLO(str(model_path))
@@ -37,17 +37,14 @@ class YOLODetector:
 
     # ==================================================
 
-    def track(
-        self,
-        frame,
-        classes=[0],
-    ):
+    def track(self, frame, classes=[0, 32]):
 
         return self.model.track(
             source=frame,
             persist=True,
             tracker=self.tracker,
             conf=self.confidence,
+            classes=classes,
             imgsz=self.image_size,
             verbose=False,
         )
