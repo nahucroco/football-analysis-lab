@@ -4,9 +4,8 @@ import time
 import cv2
 
 from src.video.video_processor import VideoProcessor
-from src.detection.yolo_detector import YOLODetector
+from src.detection.player_detector import YOLODetector
 from src.visualization.renderer import Renderer
-
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -27,12 +26,8 @@ detector = YOLODetector(
 
 renderer = Renderer()
 
-print(
-    f"Resolución: {processor.width}x{processor.height}"
-)
-print(
-    f"FPS del video: {processor.fps:.2f}"
-)
+print(f"Resolución: {processor.width}x{processor.height}")
+print(f"FPS del video: {processor.fps:.2f}")
 
 tracks = {}
 
@@ -49,10 +44,7 @@ while True:
 
     frame_number += 1
 
-    print(
-        f"\rProcesando frame {frame_number}/{processor.total_frames}",
-        end=""
-    )
+    print(f"\rProcesando frame {frame_number}/{processor.total_frames}", end="")
 
     results = detector.track(frame)
 

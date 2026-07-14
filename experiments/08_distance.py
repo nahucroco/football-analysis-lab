@@ -4,10 +4,9 @@ import csv
 import cv2
 
 from src.video.video_processor import VideoProcessor
-from src.detection.yolo_detector import YOLODetector
+from src.detection.player_detector import YOLODetector
 from src.visualization.renderer import Renderer
 from src.analytics.metrics import Metrics
-
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -44,10 +43,7 @@ while True:
 
     frame_number += 1
 
-    print(
-        f"\rProcesando frame {frame_number}/{processor.total_frames}",
-        end=""
-    )
+    print(f"\rProcesando frame {frame_number}/{processor.total_frames}", end="")
 
     results = detector.track(frame)
 
@@ -120,9 +116,7 @@ processor.release()
 
 elapsed = time.perf_counter() - start
 
-distances = metrics.calculate_distance(
-    tracks
-)
+distances = metrics.calculate_distance(tracks)
 
 csv_path = BASE_DIR / "outputs" / "distance_report.csv"
 
@@ -161,10 +155,7 @@ for track_id, distance in sorted(
     reverse=True,
 ):
 
-    print(
-        f"Jugador {track_id:>3}: "
-        f"{distance:.2f} px"
-    )
+    print(f"Jugador {track_id:>3}: " f"{distance:.2f} px")
 
 print()
 

@@ -4,7 +4,7 @@ import time
 import cv2
 
 from src.video.video_processor import VideoProcessor
-from src.detection.yolo_detector import YOLODetector
+from src.detection.player_detector import YOLODetector
 from src.visualization.renderer import Renderer
 from src.calibration.field import FootballField
 from src.calibration.homography import Homography

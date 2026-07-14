@@ -5,8 +5,7 @@ import time
 import cv2
 
 from src.video.video_processor import VideoProcessor
-from src.detection.yolo_detector import YOLODetector
-
+from src.detection.player_detector import YOLODetector
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -47,10 +46,7 @@ while True:
 
     frame_number += 1
 
-    print(
-        f"\rProcesando frame {frame_number}/{processor.total_frames}",
-        end=""
-    )
+    print(f"\rProcesando frame {frame_number}/{processor.total_frames}", end="")
 
     results = detector.track(frame)
 
@@ -114,10 +110,12 @@ while True:
         cx = (x1 + x2) // 2
         cy = (y1 + y2) // 2
 
-        tracks.setdefault(track_id, []).append({
-            "frame": frame_number,
-            "center": (cx, cy),
-        })
+        tracks.setdefault(track_id, []).append(
+            {
+                "frame": frame_number,
+                "center": (cx, cy),
+            }
+        )
 
     cv2.imshow(
         "Football Analysis Lab",
@@ -139,27 +137,31 @@ with open(csv_path, "w", newline="") as f:
 
     writer = csv.writer(f)
 
-    writer.writerow([
-        "track_id",
-        "first_frame",
-        "last_frame",
-        "frames_seen",
-        "duration_seconds",
-        "average_confidence",
-        "missing_frames",
-    ])
+    writer.writerow(
+        [
+            "track_id",
+            "first_frame",
+            "last_frame",
+            "frames_seen",
+            "duration_seconds",
+            "average_confidence",
+            "missing_frames",
+        ]
+    )
 
     for track_id, stats in track_stats.items():
 
-        writer.writerow([
-            track_id,
-            stats["first_frame"],
-            stats["last_frame"],
-            stats["frames_seen"],
-            round(stats["frames_seen"] / processor.fps, 2),
-            round(stats["conf_sum"] / stats["frames_seen"], 3),
-            stats["missing_frames"],
-        ])
+        writer.writerow(
+            [
+                track_id,
+                stats["first_frame"],
+                stats["last_frame"],
+                stats["frames_seen"],
+                round(stats["frames_seen"] / processor.fps, 2),
+                round(stats["conf_sum"] / stats["frames_seen"], 3),
+                stats["missing_frames"],
+            ]
+        )
 
 print("\n" + "=" * 50)
 print("TRACKING REPORT")
@@ -168,17 +170,9 @@ print("=" * 50)
 print(f"Frames procesados: {frame_number}")
 print(f"IDs creados: {len(track_stats)}")
 
-long_tracks = sum(
-    1
-    for stats in track_stats.values()
-    if stats["frames_seen"] >= 100
-)
+long_tracks = sum(1 for stats in track_stats.values() if stats["frames_seen"] >= 100)
 
-short_tracks = sum(
-    1
-    for stats in track_stats.values()
-    if stats["frames_seen"] <= 10
-)
+short_tracks = sum(1 for stats in track_stats.values() if stats["frames_seen"] <= 10)
 
 max_track = max(
     track_stats,

@@ -1,3 +1,5 @@
+from turtle import color
+
 import cv2
 import numpy as np
 
@@ -267,3 +269,48 @@ class Renderer:
                 )
 
         return frame
+
+    # ==================================================
+
+    def draw_ball(
+        self,
+        frame,
+        position,
+        radius=8,
+        color=(0, 0, 255),
+        label=True,
+    ):
+
+        if position is None:
+            return
+
+        x, y = map(int, position)
+
+        cv2.circle(
+            frame,
+            (x, y),
+            radius,
+            color,
+            -1,
+        )
+
+        cv2.circle(
+            frame,
+            (x, y),
+            radius + 2,
+            (255, 255, 255),
+            2,
+        )
+
+        if label:
+
+            cv2.putText(
+                frame,
+                "BALL",
+                (x + 12, y - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                color,
+                2,
+                cv2.LINE_AA,
+            )

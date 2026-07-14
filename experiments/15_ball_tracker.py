@@ -4,7 +4,7 @@ import time
 import cv2
 
 from src.video.video_processor import VideoProcessor
-from src.detection.yolo_detector import YOLODetector
+from src.detection.player_detector import YOLODetector
 from src.visualization.renderer import Renderer
 from src.calibration.field import FootballField
 from src.calibration.homography import Homography
@@ -16,9 +16,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 VIDEO_PATH = BASE_DIR / "videos" / "partido.mp4"
 
-OUTPUT_PATH = BASE_DIR / "outputs" / "partido_speed.mp4"
+OUTPUT_PATH = BASE_DIR / "outputs" / "partido_ball_tracker.mp4"
 
-MODEL_PATH = BASE_DIR / "models" / "yolo11m.pt"
+MODEL_PATH = BASE_DIR / "models" / "football" / "best.pt"
 
 FIELD_CONFIG_PATH = BASE_DIR / "config" / "field_5v5.json"
 
@@ -60,14 +60,14 @@ homography = Homography(
 
 homography.compute()
 
-distance_tracker = DistanceTracker(
+""" distance_tracker = DistanceTracker(
     field,
 )
 
 speed_tracker = SpeedTracker(
     field,
     processor.fps,
-)
+) """
 
 ball_tracker = BallTracker()
 
@@ -115,7 +115,7 @@ while True:
         end="",
     )
 
-    results = detector.track(frame)
+    results = detector.detect(frame)
 
     boxes = results[0].boxes
 
@@ -153,11 +153,18 @@ while True:
 
     ball_detections = []
 
+    players_count = 0
+
     for box in boxes:
 
         cls = int(box.cls)
 
-        if cls == 32:
+        label = results[0].names[cls]
+
+        if label == "Player":
+            players_count += 1
+
+        if label == "Ball":
 
             x1, y1, x2, y2 = map(int, box.xyxy[0])
 
@@ -179,7 +186,7 @@ while True:
 
             continue
 
-        if cls != 0:
+        if label != "Player":
             continue
 
         if box.id is None:
@@ -199,7 +206,7 @@ while True:
 
         mapped = homography.transform((cx, cy))
 
-        distance_tracker.update(
+        """ distance_tracker.update(
             track_id,
             mapped,
         )
@@ -209,6 +216,14 @@ while True:
             mapped,
         )
 
+        distance = distance_tracker.get_distance(
+            track_id,
+        )
+
+        speed = speed_tracker.get_speed(
+            track_id,
+        ) """
+
         top_tracks.setdefault(track_id, []).append(mapped)
 
         renderer.draw_player(
@@ -217,15 +232,7 @@ while True:
             track_id,
         )
 
-        distance = distance_tracker.get_distance(
-            track_id,
-        )
-
-        speed = speed_tracker.get_speed(
-            track_id,
-        )
-
-        renderer.draw_text(
+        """ renderer.draw_text(
             field_frame,
             f"{distance:.1f} m",
             (
@@ -243,34 +250,53 @@ while True:
                 int(mapped[1]) + 24,
             ),
             scale=0.45,
-        )
+        ) """
 
-    ball_tracker.update(ball_detections)
+    ball_tracker.update(
+        ball_detections,
+    )
 
     ball_position = ball_tracker.get_position()
 
+    print(f"DIBUJANDO -> {ball_position}")
+
     if ball_position is not None:
 
-        cv2.circle(
+        renderer.draw_ball(
             video_frame,
-            tuple(map(int, ball_position)),
-            8,
-            (0, 0, 255),
-            -1,
+            ball_position,
+        )
+
+        mapped_ball = homography.transform(
+            ball_position,
+        )
+
+        renderer.draw_ball(
+            field_frame,
+            mapped_ball,
+            radius=6,
+            label=False,
+        )
+
+    """ ball_tracker.update(ball_detections)
+
+    ball_position = ball_tracker.get_position() """
+
+    """ if ball_position is not None:
+
+        renderer.draw_ball(
+            video_frame,
+            ball_position,
         )
 
         mapped_ball = homography.transform(ball_position)
 
-        cv2.circle(
+        renderer.draw_ball(
             field_frame,
-            (
-                int(mapped_ball[0]),
-                int(mapped_ball[1]),
-            ),
-            6,
-            (0, 0, 255),
-            -1,
-        )
+            mapped_ball,
+            radius=6,
+            label=False,
+        ) """
 
     # ==========================================
     # Mostrar información
@@ -284,13 +310,13 @@ while True:
 
     renderer.draw_text(
         video_frame,
-        f"Jugadores: {len(boxes)}",
+        f"Jugadores: {players_count}",
         (20, 105),
     )
 
     renderer.draw_text(
         field_frame,
-        f"Jugadores: {len(boxes)}",
+        f"Jugadores: {players_count }",
         (20, 70),
     )
 
@@ -335,14 +361,14 @@ elapsed = time.perf_counter() - start
 print()
 
 print("=" * 60)
-print("SPEED REPORT")
+print("MATCH REPORT")
 print("=" * 60)
 
-distances = distance_tracker.get_all_distances()
+""" distances = distance_tracker.get_all_distances()
 
-max_speeds = speed_tracker.get_all_max_speeds()
+max_speeds = speed_tracker.get_all_max_speeds() """
 
-for track_id in sorted(
+""" for track_id in sorted(
     distances,
     key=distances.get,
     reverse=True,
@@ -357,9 +383,9 @@ for track_id in sorted(
         f"{distances[track_id]:6.2f} m | "
         f"Prom: {average_speed:5.2f} km/h | "
         f"Max: {max_speeds[track_id]:5.2f} km/h"
-    )
+    ) """
 
-print(f"Modelo: {MODEL_PATH.stem}")
+print(f"Modelo: {MODEL_PATH.parent.name}/{MODEL_PATH.stem}")
 print(f"Tracker: {detector.tracker}")
 
 print(f"Frames procesados: {frame_number}")
